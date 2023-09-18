@@ -37,11 +37,20 @@ UDP——最简单的传输层协议
 
 UDP的使用准备和TCP差不多，通过如下流程，即可配置好UDP传输所需的地址信息：
 
-（一些代码）
+```cpp
+sock = socket(AF_INET, SOCK_DGRAM, 0);
+bzero(&dstAddr, sizeof(&dstAddr));
+dstAddr.sin_family = AF_INET;
+inet_pton(AF_INET, receiver_ip, &dstAddr.sin_addr);
+dstAddr.sin_port = htons(receiver_port);
+```
 
-需要注意的是，UDP不是TCP那样的可靠协议，它的传输并不是可靠的，经过UDP传输的数据可能会发生损坏或者丢包。为了检查UDP是否正确的完成了传输，你可以检查它们的返回值是否和你期望传出的字节数一致：
+需要注意的是，UDP不是TCP那样的可靠协议，它的传输并不是可靠的，经过UDP传输的数据可能会发生损坏或者丢包。为了检查UDP是否正确的完成了传输，你可以检查它们的返回值是否和你期望传出/接收的字节数一致：
 
-（一些代码）
+```cpp
+if(size != sendto(sock, (char*)buf, size, MSG_DONTWAIT, (struct sockaddr*)&dstAddr, dstAddrLen)) {...}
+if(size != recvfrom(sock, (char*)buf, size, MSG_DONTWAIT, (struct sockaddr*)&srcAddr, &srcAddrLen)) {...}
+```
 
 其中，MSG_DONTWAIT表示不阻塞，立即返回执行结果。
 
