@@ -232,7 +232,7 @@ void terminateReceiver();
 
 ##### Receiver对START包和END包的响应方式
 
-对于每一个被确认接收的`START`报文或`END`报文，你需要发送一个`ACK`报文，该报文的`seq_num`已在`sender`的实现要求中描述，遂不再赘述。由于`receiver`需要通过写入文件来完成传输，请不要忘记在收到`END`报文时对文件写入进行收尾。
+对于每一个被确认接收的`START`报文或`END`报文，你需要发送一个`ACK`报文，该报文的`seq_num`已在`sender`的实现要求中描述，遂不再赘述。由于`receiver`需要通过写入文件来完成传输，请不要忘记在收到`END`报文时对文件写入进行收尾。特别的，如果`START`报文发生了`checksum`错误，请在init函数中返回-1结束测试进程。
 
 ##### Receiver对DATA包的响应方式（GBN）
 
