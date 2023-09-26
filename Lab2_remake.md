@@ -22,28 +22,35 @@ lab2的文档中包含一些引导思考（标有 **[?]** ）和提供建议（�
 
 ### RTP协议头描述
 
-首先，我们来了解一下RTP的协议头结构：
+首先，我们来了解一下RTP的协议头结构，它被定义在rtp.h中：
 
 ``` cpp
-typedef struct RTP_Header {
-    uint8_t type;
-    uint16_t length;
-    uint32_t seq_num;
-    uint32_t checksum;
+// rtp.h
+typedef struct __attribute__((__packed__)) RTP_header {
+    uint32_t seq_num;   // Sequence number
+    uint16_t length;    // Length of data, 0 for others
+    uint32_t checksum;  // 32-bit CRC
+    uint8_t flags;      // refers to specific meaning
 } rtp_header_t;
 ```
 
 为了简化操作，RTP头里的所有字段的字节序均是小端法。
 
-**type** 标识了一个RTP报文的类型，0:`START`, 1:`END`, 2:`DATA`, 3:`ACK`，如何使用这些类型请参照后续对lab任务的详细描述。
+> * **seq_num**：表示一个报文在传输序列中的位置。假设`seq_num`从433开始计算，那么`seq_num`为433的包即为发送的第0个包，`seq_num`为536的包是第103个包。
+> * **length**：表示一个报文所携带数据（后称payload）的字节数。对于部分不携带数据的报文来说，这个字段的值为0。
+> * **checksum**：基于32-bit CRC算法计算得出的校验码，该计算API的声明在util.h中，定义在util.c中。
+> * **flags**：它的高5位均为0，但低3位分别表示该报文的三种状态，这三种状态的用途请参考文档的后续描述。其定义请看rtp.h：
 
-**length** 标识了一个RTP报文**数据段**的长度（即RTP头后的payload长度），对于`START`,`END`,`ACK`类型的报文来说，这个字段的值为0。
+```cpp
+// rtp.h
+typedef enum RtpHeaderFlag {
+    RTP_SYN = 0b0001,
+    RTP_ACK = 0b0010,
+    RTP_FIN = 0b0100,
+} rtp_header_flag_t;
+```
 
-**seq_num** 序列号，用于识别顺序做按序送达。每一个报文持有的`seq_num`指明这个报文在整条消息中的次序。例如`seq_num`为0的报文就是第一个报文。
-
-**checksum** 为RTP头以及RTP报文数据段基于32-bit CRC计算出的值，该计算的API已经在util.h中提供。
-
-**[?]RTFSC：这个字段在干什么？这个API有什么用？**
+**[?]RTFSC：checksum这个字段在干什么？这个API有什么用？**
 
 > RTFSC的意思是**R**ead **T**he **F**riendly **S**ource **C**ode，许多问题的答案往往就藏在项目的源代码中。如果你并不清楚这个字段的作用，请翻阅课件，这将直接决定你能否正确的使用我们的提供的API。如果你不清楚这个API究竟做了什么，请直接阅读它的源代码，思考为什么它返回的结果可以作为`checksum`。比起被动的灌输知识，我们认为主动的引导同学们思考能更好的提高大家的水平，所以作为RTFSC的练习，我们将`checksum`字段的维护方式以注释形式插入到了我们的CRC源代码中，只要你忠实地阅读了源码，应该就能正确的实现与`checksum`相关的功能。
 
@@ -74,54 +81,65 @@ man recvfrom
 
 > RTFM的意思是**R**ead **T**he **F**riendly **M**anual，未来在工作和科研中，大家会接触到许多他人已经写好的代码，其中往往会使用一些同学们可能没有见到过的库函数（例如：strtok，vprintf），又或者某些库函数太久不接触，你已经忘记怎么用了/它需要include哪个库。这种情况下，比起等待大神的回复，一行man xxx显然更快。所以，学会自己阅读手册是非常重要的。上网查询的好处在于中文博客没有阅读障碍，但是那毕竟不是和你的环境所匹配的手册，而手册是会随着库的版本改变的。如果版本不能匹配，或者因为低质量博客引入了错误的代码，那就得不偿失了。
 
-## 任务概览
+## 任务描述
 
 ### RTP协议的工作流程
 
-**建立连接** `sender`首先发送一个`type`为`START`，并且`seq_num`为随机值的报文，此后`receiver`应该将带有相同`seq_num`的`ACK`报文发回，`sender`收到`ACK`报文并确认`seq_num`正确后，即认为连接已经建立。
+RTP的工作流程共分为三个阶段，分别是建立连接、数据传输和终止连接。为了方便大家理解sender和receiver如何交互，我们会在本节详细描述建立连接与终止连接的流程，而中间数据传输的部分会在后面的章节深入描述。
 
-**数据传输** 在完成连接的建立之后，要发送的数据由`DATA`类型的报文进行传输。发送方的数据报文的`seq_num`从0开始每个报文递增。注意，数据传输阶段使用的`seq_num`与建立连接时使用的`seq_num`没有联系。具体的传输细节请看后续具体任务的描述。
+**建立连接** 我们参考了TCP的三次握手流程来进行连接建立。首先我们会以同样的窗口最大尺寸window_size初始化sender和receiver。之后，我们将seq_num的初始值设为在[0, window_size-1]之中的随机数，就可以开始发送报文建立连接了。具体步骤如下：
 
-**终止连接** 在数据传输完毕后，`sender`发送一个`type`为`END`的报文以终止连接。为了保证所有数据都传输完成，该`END`报文的`seq_num`应当和`receiver`期望收到的下一个报文的`seq_num`相同，在接收到由`receiver`发回的带有相同`seq_num`的`ACK`报文后即认为连接断开。
+> * **第一次握手**：sender发送一个seq_num为上述初始值，且flags设置了SYN，**不携带任何数据**的报文。
+> * **第二次握手**：receiver启动之后，会等待5s以收到sender发出的SYN报文。在收到sender发来的上述报文后，你需要发回一个seq_num为sender发来的报文的seq_num+1，且flags同时设置了SYN和ACK，并**不携带任何数据**的报文。
+> * **第三次握手**：sender在收到来自receiver的回应报文后，发回一个flags标记了ACK，且seq_num为收到回应报文的seq_num的报文。
+> * **差错应对**：对于上述三次握手，我们的sender和receiver需要遵循相同的错误处理逻辑：如果在发出报文后，对端100ms内没有任何回应/收到了一个checksum错误的报文，则重传该次握手报文。在任意一个发包阶段进行50次重试/receiver启动后等待5s之内什么都没有收到/报文checksum正确但内容不符合文档描述时，你应该输出错误原因，并**通过让main函数返回-1而不是使用exit来异常结束进程**。
+
+**[?]STFW：我不会写计时功能，怎么办？**
+
+> STFW的意思是**S**earch **T**he **F**riendly **W**eb，我们并不强制要求同学们使用某种特定的计时实现，只要你们能够正确的实现以毫秒为单位的计时即可。当你面对这种你不知道如何实现的功能时，你可以尝试通过google/bing查找“**C++ 计时**”这样的关键词，再结合你看到的博客和linux man，来完成这部分功能。当你缺乏解决问题的方向时，STFW能很好的启发你。由于Epoll的计时实现比较复杂，如果你选择使用Epoll编程，请参考下方的代码实现计时器：
+
+```cpp
+// TODO: add some codes here
+```
+
+**数据传输** 在完成连接的建立之后，要发送的数据由flags为0的报文进行传输。发送方的数据报文的`seq_num`从建立连接所用的seq_num开始，每个包的seq_num+1，即seq_num不一定是从零开始的。具体的传输细节请看后续具体任务的描述。**TODO：详述具体的初始seq_num和递增规则。**
+
+**终止连接** 在数据传输完毕后，我们需要关闭sender和receiver之间的连接，具体步骤如下：
+
+> * **第一次握手**：sender发送一个flags标记了FIN、seq_num为按正常传输的最后一个seq_num的报文。
+> * **第二次握手**：receiver收到该报文后需要发回一个标记了FIN和ACK，并且seq_num相同的报文，sender收到该报文后，即认为连接终止。
+> * **差错应对**：这里遵循和建立连接相似的策略，唯一的区别是，面对建立连接时需要报告错误的情形，由于传输已经完成，我们仍然可以报告错误，但需要直接默认连接关闭，**通过让main函数返回-1而不是使用exit来异常结束进程**。
 
 **[!]KISS法则：先完成，再完美**
 
 > 在往年的lab中，总有同学希望一次性写完全部的代码，然后再慢慢debug。但是在面对一些大型项目时，这种做法很容易一口气引入大量的bug，让测试过程变得苦不堪言。KISS的意思是：**K**eep **I**t **S**imple and **S**tupid。在实现复杂逻辑的时候，先从最基本的功能开始搭建，然后立马测试，保证这部分代码正确后，再去实现下一批功能。lab2的代码量或许不大，但它要实现的逻辑比较复杂，按照KISS法则步步为营地推进，可以大大提高开发的效率。
 
-## 任务细节
-
 ### 第一部分：实现RTP Sender
 
 #### Sender实现要求
 
-你应当在`sender_def.c`程序中实现以下三个函数，其均已在`sender_def.h`中被声明。
+首先，为了文档描述方便，我们在此约定：**数据报文指代flags为0的报文，ACK报文指代flags字段仅标记了ACK的报文**
+
+你应当在`sender.c`程序中基于给定的main函数实现完整的sender功能。启动sender所需的参数会通过命令行参数按照如下顺序给出：接收端ip地址、接收端端口、待传输文件的路径、窗口最大尺寸和是否启用优化模式。
 
 ``` cpp
-/**
- * @brief 用于建立RTP连接
- * @param receiver_ip receiver的IP地址
- * @param receiver_port receiver的端口
- * @param window_size 滑动窗口大小
- * @return -1表示连接失败，0表示连接成功
- **/
-int initSender(const char* receiver_ip, uint16_t receiver_port, uint32_t window_size);
+// sender.c
+#include "rtp.h"
+#include "util.h"
 
-/**
- * @brief 用于发送数据
- * @param message 要发送的文件名
- * @return -1表示发送失败，0表示发送成功
- **/
-int sendMessage(const char* message);
+int main(int argc, char **argv) {
+    if (argc != 6) {
+        LOG_FATAL("Usage: ./sender [receiver ip] [receiver port] [file path] "
+                  "[window size] [Mode]\n");
+    }
 
-/**
- * @brief 用于断开RTP连接以及关闭UDP socket
- **/
-void terminateSender();
+    LOG_DEBUG("Sender: exiting...\n");
+
+    return 0;
+}
 ```
 
-以函数形式实现lab任务是为了方便进行测试，测试程序会直接调用这三个函数，因此请当心不要使用错误的函数定义。注意，你不需要实现一个完整的`sender`，但如果你希望单独执行它们，你也可以使用这三个函数另外实现一个自己的`sender`的可执行程序，这对于后续的lab2任务也一样。在经过lab0的cmake训练后，这对你应该不是问题。
-
-请不要在 **任何要求你实现的函数（包括后续任务）** 内部直接使用`exit`等导致**进程**退出的指令，这会导致评测程序也直接停止执行，无法给出正确的评分。
+请不要在 **任何要求你实现的代码（包括后续任务）** 中直接使用`exit`等导致**进程**退出的指令，这会导致评测程序也直接停止执行，无法给出正确的评分。
 
 #### Sender功能说明
 
@@ -134,17 +152,15 @@ void terminateSender();
 **[?]为什么要丢弃checksum不对的报文呢？**
 > 能问出这个问题，说明你对`checksum`的用途仍然不够了解，快去看看课件吧。
 
-##### Sender建立连接
+##### Sender建立连接与终止连接
 
-首先，`sender`需要按照给定的窗口大小和socket地址，对整个模块进行初始化，并按照如下流程和`receiver`建立连接：
-
-> - `sender`发送`START`报文，其`seq_num`为随机值
-> - `receiver`返回`ACK`报文，其`seq_num`与`sender`发出的`START`报文中的`seq_num`一致
-> - `sender`检查`receiver`发回的报文，如果无误则认为连接建立
+首先，`sender`需要按照给定的窗口大小和socket地址，对整个模块进行初始化，并按照前述流程建立连接。在传输结束后，需要按照前述流程终止连接。
 
 ##### Sender报文处理
 
 在连接成功建立后，`sender`需要根据传入的文件名，将其打开、分片并装入不同的报文中并发送。在发送之前，请确保RTP协议头的每一个字段都被编辑好了。大家可以自由实现这部分逻辑，但作为参考，我们提供一种可行的报文处理逻辑如下：
+
+**TODO：检查这个逻辑是否可用**
 
 > - `sender`打开文件，将未发送的文件字节分配给滑动窗口内的报文，作为其`payload`
 > - `sender`为装载好`payload`的报文编辑RTP协议头字段
@@ -154,7 +170,7 @@ void terminateSender();
 
 ##### Sender滑动窗口
 
-你需要结合滑动窗口的机制来调整待发送的报文/已完成发送的报文的集合。窗口大小`window_size`将会作为`sender`/`receiver`的初始化参数。你需要保证当前正在传输，并且没有被`receiver`确认的报文数量，即滑动窗口的上下限之差没有超过`window_size`。所以，当以下情形发生时，你的滑动窗口应该发生一些变化：
+在完成基本的传输功能后，你需要结合滑动窗口的机制来调整待发送的报文/已完成发送的报文的集合。窗口大小`window_size`将会作为`sender`/`receiver`的初始化参数。你需要保证当前正在传输，并且没有被`receiver`确认的报文数量，即滑动窗口的上下限之差没有超过`window_size`。所以，当以下情形发生时，你的滑动窗口应该发生一些变化：
 
 > - `sender`已经发出了一些报文，但这些报文中未被`ACK`确认的报文的数量还没有达到滑动窗口的限制。此时，你的滑动窗口的上限应该增加。
 > - `sender`的滑动窗口中，在滑动窗口最左侧（也就是窗口中最早发送的报文所在的那一侧）有一个或连续的多个报文已经被`ACK`确认。此时，你的滑动窗口的下限应该增加。
@@ -172,70 +188,48 @@ void terminateSender();
 > - 任意数量的任意`ACK`报文多次接收
 > - `receiver`传回的报文`checksum`错误
 
-`receiver`对每一个`DATA`报文，会以发回一个`ACK`报文的方式确认收到。为了处理`DATA`报文丢失或者`ACK`报文丢失的情况，你需要设置一个计时器以自动重传未被确认的`DATA`报文。
+`receiver`对每一个数据报文，会以发回一个`ACK`报文的方式确认收到。为了处理数据报文丢失或者`ACK`报文丢失的情况，你需要设置一个计时器以自动重传未被确认的数据报文。
 
-该计时器在滑动窗口发生变化时重置，当该计时器距离上次重置的时间过去100ms的时候，需要将**当前窗口中的所有`DATA`报文**全部重新发送。
-
-**[?]STFW：我不会写计时器，怎么办？**
-
-> STFW的意思是**S**earch **T**he **F**riendly **W**eb，我们并不强制要求同学们使用某种特定的计时实现，只要你们能够正确的实现100ms的计时即可。当你面对这种你不知道如何实现的功能时，你可以尝试通过搜索引擎查找“**C++ 计时**”这样的关键词，再结合你看到的博客和linux man，来完成这部分功能。当你缺乏解决问题的方向时，STFW能很好的启发你。由于Epoll的计时实现比较复杂，如果你选择使用Epoll编程，请参考下方的代码实现计时器：
-
-```cpp
-// TODO: add some codes here
-```
-
-##### Sender终止连接
-
-`sender`在传输完整个文件后，应该发送一个`END`报文以标记连接的终止。注意，这个报文的`seq_num`依旧符合前述的递增规则，例如最后一个`DATA`报文的`seq_num`是1000，那么这个`END`报文的`seq_num`就应该是1001。具体的终止流程如下：
-
-> - `sender`收到了最后一个未确认`DATA`报文的`ACK`，确认所有报文已经成功送达
-> - `sender`按照上述要求发送`END`报文
-> - `sender`收到该`END`报文的`ACK`报文，其`seq_num`应该和`END`报文一致；或者在发出`END`5秒后没有得到回应，即可认为连接已经关闭
+具体的重传逻辑如下：该计时器在滑动窗口发生变化时重置，当该计时器距离上次重置的时间过去100ms的时候，需要将**当前窗口中的所有数据报文**全部重新发送。
 
 ### 第二部分：实现RTP Receiver
 
 #### Receiver实现要求
 
-你应当在`receiver_def.c`程序中实现以下三个函数，其均已在`receiver_def.h`中被声明。
+你应当在`receiver.c`程序中基于给定的main函数实现完整的receiver功能。启动receiver所需的参数会通过命令行参数按照如下顺序给出：接收端需要监听的端口、待接收文件的存放路径、窗口最大尺寸和是否启用优化模式。
 
 ``` cpp
-/**
- * @brief 开启receiver并在所有IP的port端口监听等待连接
- * 
- * @param port receiver监听的port
- * @param window_size 滑动窗口大小
- * @return -1表示连接失败，0表示连接成功
- */
-int initReceiver(uint16_t port, uint32_t window_size);
+// receiver.c
+#include "rtp.h"
+#include "util.h"
 
-/**
- * @brief 用于接收数据并在接收完后断开RTP连接
- * @param filename 用于写入接收数据的文件名
- * @return >0表示接收完成后到数据的字节数 -1表示出现其他错误
- */
-int recvMessage(char* filename);
+int main(int argc, char **argv) {
+    if (argc != 5) {
+        LOG_FATAL("Usage: ./receiver [Receiver Port] [File Path] [Window Size] "
+                  "[Mode]\n");
+    }
 
-/**
- * @brief 用于接收数据失败时断开RTP连接以及关闭UDP socket
- */
-void terminateReceiver();
+    LOG_DEBUG("Receiver: exiting...\n");
+
+    return 0;
+}
 ```
 
 #### Receiver功能说明
 
-`receiver`必须基于GBN算法，能准确并且完整的收到及储存`sender`所发的信息。幸运的是，我们只需要考虑仅存在一个`sender`的情况。
+`receiver`应该监听指定端口，采用RTP协议，基于GBN算法，通过UDP套接字从接收方接收数据，并以文件的形式存储收到的数据。
 
 ##### Receiver对任何收入报文的检查
 
 与`sender`相同，`receiver`需要对收到的报文计算其CRC32的`checksum`，对于`checksum`不对的报文应当直接丢弃。
 
-##### Receiver对START报文和END报文的响应方式
+##### Receiver建立连接和终止连接
 
-对于每一个被确认接收的`START`报文或`END`报文，你需要发送一个`ACK`报文，该报文的`seq_num`已在`sender`的实现要求中描述，遂不再赘述。由于`receiver`需要通过写入文件来完成传输，请不要忘记在收到`END`报文时对文件写入进行收尾。特别的，如果`START`报文发生了`checksum`错误，请在init函数中返回-1结束测试进程。
+receiver在启动时需要根据给定参数进行初始化，并按照上述流程建立连接。在收到sender传来的flags标记了FIN的报文时，应该主动结束文件写入，并按照上述流程终止连接。
 
 ##### Receiver对DATA报文的响应方式（GBN）
 
-对于每一个被确认接收的`DATA`报文，`receiver`需要发送一个`ACK`报文，该报文的`seq_num`为当前期望收到的下一个`DATA`报文的`seq_num`。这个期望收到的`DATA`报文是当前未被`Receiver`收到的报文中，`seq_num`最小的报文。
+对于每一个被确认接收的数据报文，`receiver`需要发送一个`ACK`报文，该报文的`seq_num`为当前期望收到的下一个数据报文的`seq_num`。这个期望收到的数据报文是当前未被`receiver`收到的报文中，`seq_num`最小的报文。
 
 举例来说有如下几种情况(设期望收到的下一个报文`seq_num为N`):
 
@@ -257,30 +251,13 @@ void terminateReceiver();
 
 **[?]文档没有写Receiver的超时重传，我是不是可以开摆不管了？**
 
-> 这个世界上不存在十全十美的文档，因此你仍然需要考虑隐藏在字面之下的细节。如果`receiver`完全没有重传机制（也就是每个`ACK`报文最多被传输1次，包括对`START`和`END`的回应），在和`sender`交互时，可能会遇到哪些问题？我们希望同学们结合`sender`的重传机制和终止连接的流程，好好想想这个问题，这能让大家对整个lab有更加深刻的认识。如果你发现了这个问题但不知道怎么解决，请直接参考`sender`在终止连接的过程中所做的一切（包括等待时间）。
+> 这个世界上不存在十全十美的文档，因此你仍然需要考虑隐藏在字面之下的细节。如果`receiver`在数据传输阶段完全没有重传机制（也就是每个数据报文的`ACK`报文最多被传输1次），它是否还可以和符合前述行为的sender正常协同工作？我们希望同学们可以思考一下这个问题，这能让大家对lab2的理解更加深入。
 
 ### 第三部分：优化RTP Sender/Receiver的重传逻辑
 
 #### OPT-Sender/OPT-Receiver实现要求
 
-你应当在`sender_def.c`和`receiver_def.c`中应当实现以下函数，**注意该函数需要兼容之前写的`initSender,initReceiver`以及`terminateSender,terminateReceiver`函数**。
-
-``` cpp
-
-/**
- * @brief 用于发送数据(优化版本的RTP)
- * @param message 要发送的文件名
- * @return -1表示发送失败，0表示发送成功
- **/
-int sendMessageOpt(const char* message);
-
-/**
- * @brief 用于接收数据并在接收完后断开RTP连接(优化版本的RTP)
- * @param filename 用于写入接收数据的文件名
- * @return >0表示接收完成后到数据的字节数 -1表示出现其他错误
- */
-int recvMessageOpt(char* filename);
-```
+你应当在`sender.c`和`receiver.c`中添加对优化模式的支持，如果传入的参数opt不是0，则视作优化模式启动。**注意该功能需要兼容之前写的建立连接以及断开连接的代码**。
 
 #### OPT-Sender/OPT-Receiver功能说明
 
@@ -288,18 +265,18 @@ int recvMessageOpt(char* filename);
 
 在这部分中，我们将对前两部分所写的程序做一些优化。我们之前天衣无缝的RTP还存在什么问题呢？考虑在前面的部分中编写的程序，面对如下窗口大小为3的情况时，将如何工作:
 
-> - `sender`向`receiver`发送了`seq_num`分别为0、1、2的三个报文，但`seq_num`为0的报文在传输中丢失了。
-> - 在这种情况下，`receiver`将返回两个`seq_num`为0的`ACK`报文。这将导致`sender`超时并重传`DATA`报文0、1和2。
-> - 然而，`receiver`已经收到过`DATA`报文1和2，只是由于遵循GBN算法而没有缓存它们，因此重传的这两个报文是不必要的。
+> - `sender`向`receiver`发送了`seq_num`分别为0、1、2的三个数据报文，但`seq_num`为0的数据报文在传输中丢失了。
+> - 在这种情况下，`receiver`将返回两个`seq_num`为0的`ACK`报文。这将导致`sender`超时并重传数据报文0、1和2。
+> - 然而，`receiver`已经收到过数据报文1和2，只是由于遵循GBN算法而没有缓存它们，所以这两个报文的重传是不必要的。
 
 ##### 性能优化：选择重传
 
-为了优化RTP在这种情况下的性能，我们需要保证传输成功的报文不会被重传。因此，你需要相应地修改你的`receiver`和`sender`，将其重传逻辑从GBN修改为**选择重传**。在这个算法中，`ACK`的含义将会发生变化：其`seq_num`不再表示期望收到的下一个`DATA`报文的`seq_num`，而是表示带有该`seq_num`的`DATA`报文已经被`receiver`收到并缓存。所以你需要做如下改动:
+为了优化RTP在这种情况下的性能，我们需要保证传输成功的报文不会被重传。因此，你需要相应地修改你的`receiver`和`sender`，将其重传逻辑从**GO-BACK-N**修改为**选择重传**。在这个算法中，`ACK`的含义将会发生变化：其`seq_num`不再表示期望收到的下一个`DATA`报文的`seq_num`，而是表示带有该`seq_num`的`DATA`报文已经被`receiver`收到并缓存。所以你需要做如下改动:
 
-> - 对于`sender`：你需要记录当前滑动窗口内的所有`DATA`报文中，哪些报文收到了对应的**正确的**`ACK`，哪些没有。当计时器达到重传时限时，重置计时器，并只重传那些**没有被`ACK`确认的报文**。其滑动窗口仍然需要满足不会超出尺寸上限的原则，并会随着传输成功自行移动。
-> - 对于`receiver`：在收到`seq_num`为X的`DATA`报文后，检查**其`checksum`是否正确且`seq_num`是否在滑动窗口内**。如果无误，**缓存**该`DATA`报文，并发回一个`seq_num`同样为X的`ACK`报文，以表明带有该`seq_num`的报文已经被成功接收。如果有误，直接丢弃该`DATA`报文并**不作回应**。其滑动窗口仍然需要满足不会超出尺寸上限的原则，能够筛选出并丢弃不在窗口内的传入报文，并会随着传输成功自行移动。注意，在选择重传的逻辑下，你的`receiver`应该支持在某些情形下一次性写入多个连续的`DATA`报文。
+> - 对于`sender`：你需要记录当前滑动窗口内的所有数据报文中，哪些报文收到了对应的**正确的**`ACK`，哪些没有。当计时器达到重传时限时，重置计时器，并只重传那些**没有被`ACK`确认的报文**。其滑动窗口仍然需要满足不会超出尺寸上限的原则，并会随着传输成功自行移动。
+> - 对于`receiver`：在收到`seq_num`为X的`DATA`报文后，检查**其`checksum`是否正确且`seq_num`是否在滑动窗口内**。如果无误，**缓存**该数据报文，并发回一个`seq_num`同样为X的`ACK`报文，以表明带有该`seq_num`的报文已经被成功接收。如果有误，直接丢弃该数据报文并**不作回应**。其滑动窗口仍然需要满足不会超出尺寸上限的原则，能够筛选出并丢弃不在窗口内的传入报文，并会随着传输成功自行移动。注意，在选择重传的逻辑下，你的`receiver`应该支持在某些情形**下一次性写入多个连续的数据报文，并保证写入的数据顺序正确**。
 
-优化后，在之前的例子中，`sender`仍会等待到超时，但仅重传窗口中未被ACK确认的`DATA`报文0，减少了流量的浪费。
+优化后，在之前的例子中，`sender`仍会等待到超时，但仅重传窗口中未被ACK确认的数据报文0，减少了流量的浪费。
 
 ## 测试你的RTP协议
 
@@ -319,21 +296,22 @@ printf("sth for debugging\n");
 
 ```cpp
 // util.h
-#define DEBUG
-#ifdef DEBUG
-#define LOG_DEBUG(...) \
-    do { \
-        fprintf(stderr, "\033[40;31m[DEBUG] \033[0m" __VA_ARGS__); \
-        fflush(stderr); \
+#ifdef LDEBUG
+#define LOG_DEBUG(...)                                                  \
+    do {                                                                \
+        fprintf(stderr, "\033[40;33m[ DEBUG    ] \033[0m" __VA_ARGS__); \
+        fflush(stderr);                                                 \
     } while (0)
 #else
 #define LOG_DEBUG(...)
 #endif
 ```
 
-> 这个宏的用法和printf一致，但可以被**DEBUG**宏开关其输出。另外，我们的测评程序同样会使用这个宏来进行调试输出。如果你希望对二者进行区分，你可以复制之后自行修改一份宏专供自己的代码使用。如果你不知道如何修改，请STFW或参考同样在util.h中的另外两个类似的宏。
+> 这个宏的用法和printf一致，但可以被**LDEBUG**宏开关其输出。另外，我们的测评程序同样会使用这个宏来进行调试输出。如果你希望对二者进行区分，你可以复制之后自行修改一份宏专供自己的代码使用。如果你不知道如何修改，请STFW或参考同样在util.h中的另外两个类似的宏。
 
 ## 测试程序规范说明
+
+TODO：检查测试描述是否正确
 
 ### 被传输文件的规范
 
@@ -365,14 +343,89 @@ printf("sth for debugging\n");
 
 ### 测试点内容
 
-Deadline前共有26个测试点，其中有2个测试点无传输故障，分别测试原始版本的RTP协议实现和优化版本的RTP协议实现。
-
-其余24个测试点分为4组，每组6个测试，分别测试优化/非优化版本的`sender`/`receiver`。对于每组故障，6个测试点分别为单独的第1-4类传输故障，少量1-4类传输故障任意混合，以及大量1-4类传输故障任意混合。注意：
-
-> - 任何一类故障均可重复出现。
-> - 由于窗口大小设置，这24个测试点均有可能发生自然的报文丢失故障，前两个无传输故障测试点不受影响。
-
-Deadline后新增10个测试点，包含更大窗口，更大数据，以及更高故障概率的测试，除这些变化以外均遵守以上说明。
+<table>
+    <tr>
+        <td>类别</td>
+        <td>测试点名称</td>
+        <td>分值</td>
+        <td>是否Deadline前放出</td>
+        <td>数据点内容</td>
+    </tr>
+    <tr>
+        <td rowspan="7">RTPSender</td>
+        <td>SmallWindow</td>
+        <td>10</td>
+        <td>是</td>
+        <td>窗口尺寸为？的sender传输？bytes的文件</td>
+    </tr>
+    <tr>
+        <td>BigWindow</td>
+        <td>10</td>
+        <td>是</td>
+        <td>窗口尺寸为？的sender传输？bytes的文件</td>
+    </tr>
+    <tr>
+        <td>Put</td>
+        <td>10</td>
+        <td>是</td>
+        <td>上传大小为3bytes的，文件名长度不超过3bytes的文件，文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td>List</td>
+        <td>10</td>
+        <td>是</td>
+        <td>获取文件夹内所有的文件列表</td>
+    </tr>
+    <tr>
+        <td>SHA256</td>
+        <td>10</td>
+        <td>是</td>
+        <td>获取文件的 sha256 校验码</td>
+    </tr>
+    <tr>
+        <td>GetBig</td>
+        <td>10</td>
+        <td>否</td>
+        <td>获取大小为1MB的，文件名为8bytes的文件，文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td>PutBig</td>
+        <td>10</td>
+        <td>否</td>
+        <td>上传大小为1MB的，文件名为8bytes的文件，文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td rowspan="5">FTPClient</td>
+        <td>Open</td>
+        <td>10</td>
+        <td>是</td>
+        <td>成功和Server建立连接</td>
+    </tr>
+    <tr>
+        <td>Get</td>
+        <td>10</td>
+        <td>是</td>
+        <td>获取大小为3bytes的，文件名长度不超过3bytes的文件，该文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td>Put</td>
+        <td>10</td>
+        <td>是</td>
+        <td>上传大小为3bytes的，文件名长度不超过3bytes的文件，该文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td>GetBig</td>
+        <td>10</td>
+        <td>否</td>
+        <td>获取大小为1MB的，文件名为8bytes的文件，文件名和内容随机生成</td>
+    </tr>
+    <tr>
+        <td>PutBig</td>
+        <td>10</td>
+        <td>否</td>
+        <td>上传大小为1MB的，文件名为8bytes的文件，文件名和内容随机生成</td>
+    </tr>
+</table>
 
 ### 评分标准
 
