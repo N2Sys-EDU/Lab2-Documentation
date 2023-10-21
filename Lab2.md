@@ -293,7 +293,7 @@ make
         <td>RECEIVER_SINGLE_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用普通版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+        <td>使用普通版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有内容错误，两次传输都正确才算通过测试</td>
     </tr>
     <tr>
         <td>RECEIVER_SINGLE_2</td>
@@ -318,7 +318,7 @@ make
         <td>SENDER_SINGLE_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用普通版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+        <td>使用普通版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有内容错误，两次传输都正确才算通过测试</td>
     </tr>
     <tr>
         <td>SENDER_SINGLE_2</td>
@@ -330,7 +330,7 @@ make
         <td>SENDER_MIXED_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用普通版RTP SENDER，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+        <td>使用普通版RTP Sender，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
     </tr>
     <tr>
         <td>SENDER_MIXED_2</td>
@@ -343,7 +343,7 @@ make
         <td>OPT_RECEIVER_SINGLE_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用优化版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+        <td>使用优化版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有内容错误，两次传输都正确才算通过测试</td>
     </tr>
     <tr>
         <td>OPT_RECEIVER_SINGLE_2</td>
@@ -368,7 +368,7 @@ make
         <td>OPT_SENDER_SINGLE_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用优化版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+        <td>使用优化版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有内容错误，两次传输都正确才算通过测试</td>
     </tr>
     <tr>
         <td>OPT_SENDER_SINGLE_2</td>
@@ -380,7 +380,7 @@ make
         <td>OPT_SENDER_MIXED_1</td>
         <td>10</td>
         <td>是</td>
-        <td>使用优化版RTP SENDER，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+        <td>使用优化版RTP Sender，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
     </tr>
     <tr>
         <td>OPT_SENDER_MIXED_2</td>
