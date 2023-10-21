@@ -221,7 +221,7 @@ Lab2的测试存在随机因素，标准程序在与你的实现进行交互时�
 
 ## 测试
 
-Lab2共有26个测试点，每个测试点的分数占比相同。其中，有6个隐藏测试点会在ddl之后公布。通过所有测试点即可在本lab得到满分。
+Lab2共有26个测试点，每个测试点的均为10分。其中，有6个隐藏测试点会在ddl之后公布，ddl前的测试满分仅有200分。最终通过所有26个测试点即可在本lab得到满分。
 
 在ddl前公布的20个测试点中，有4个测试点不涉及网络错误，有8个测试点可能发生单个类型的错误，还有8个测试点可能发生多种错误。ddl后公布的6个隐藏测试点中，将会有相比于普通测试更大的传输数据、更高的故障发生率以及更大的滑动窗口尺寸。
 
@@ -248,8 +248,147 @@ make
 如果希望运行单个测试点，可执行如下指令：
 
 ```bash
-./rtp_test_all --gtest_filter=`测试点名`
+./rtp_test_all --gtest_filter=RTP.`测试点名称`
 ```
+
+### 测试点描述
+
+以下的表格给出了每一个测试点对应的ID和内容，注意，lab2只测试sender/receiver一对一交互的情况。
+
+<table>
+    <tr>
+        <td>类别</td>
+        <td>测试点名称</td>
+        <td>分值</td>
+        <td>是否在Deadline前放出</td>
+        <td>测试点内容</td>
+    </tr>
+    <tr>
+        <td rowspan="4">无差错测试</td>
+        <td>NORMAL</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP协议，在窗口大小为16的前提下进行两次完整的无差错传输。第一次测试Sender，第二次测试Receiver，两次都通过才算通过测试</td>
+    </tr>
+    <tr>
+        <td>NORMAL_SMALL_WINDOW</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP协议，在窗口大小为1的前提下进行两次完整的无差错传输。第一次测试Sender，第二次测试Receiver，两次都通过才算通过测试</td>
+    </tr>
+    <tr>
+        <td>NORMAL_OPT</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP协议，在窗口大小为16的前提下进行两次完整的无差错传输。第一次测试Sender，第二次测试Receiver，两次都通过才算通过测试</td>
+    </tr>
+    <tr>
+        <td>NORMAL_OPT_SMALL_WINDOW</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP协议，在窗口大小为1的前提下进行两次完整的无差错传输。第一次测试Sender，第二次测试Receiver，两次都通过才算通过测试</td>
+    </tr>
+    <tr>
+        <td rowspan="4">普通版Receiver测试</td>
+        <td>RECEIVER_SINGLE_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>RECEIVER_SINGLE_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有重复错误，第二次传输仅含有乱序错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>RECEIVER_MIXED_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Receiver，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td>RECEIVER_MIXED_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Receiver，窗口大小为16，故障率为30%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td rowspan="4">普通版Sender测试</td>
+        <td>SENDER_SINGLE_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>SENDER_SINGLE_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有重复错误，第二次传输仅含有乱序错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>SENDER_MIXED_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP SENDER，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td>SENDER_MIXED_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用普通版RTP Sender，窗口大小为16，故障率为30%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td rowspan="4">优化版Receiver测试</td>
+        <td>OPT_RECEIVER_SINGLE_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>OPT_RECEIVER_SINGLE_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Receiver，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有重复错误，第二次传输仅含有乱序错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>OPT_RECEIVER_MIXED_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Receiver，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td>OPT_RECEIVER_MIXED_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Receiver，窗口大小为16，故障率为30%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td rowspan="4">优化版Sender测试</td>
+        <td>OPT_SENDER_SINGLE_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有丢包错误，第二次传输仅含有checksum错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>OPT_SENDER_SINGLE_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Sender，窗口大小为16，故障率为10%，分别进行两次完整的传输流程。第一次传输仅含有重复错误，第二次传输仅含有乱序错误，两次传输都正确才算通过测试</td>
+    </tr>
+    <tr>
+        <td>OPT_SENDER_MIXED_1</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP SENDER，窗口大小为16，故障率为20%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+    <tr>
+        <td>OPT_SENDER_MIXED_2</td>
+        <td>10</td>
+        <td>是</td>
+        <td>使用优化版RTP Sender，窗口大小为16，故障率为30%，只进行一次完整的传输流程。四种传输错误均可能出现</td>
+    </tr>
+</table>
 
 ### 更多说明
 
@@ -259,6 +398,8 @@ make
 * 每次测试中，Sender和Receiver的窗口大小相同。
 * 每次测试都只有一个Sender和一个Receiver，且二者使用的算法（回退N或选择重传）相同。
 * 测试涉及的文件名的长度均不超过10个字符，且仅包含字母a-z。传输的数据大小不超过10MB，内容没有限制。
+* 故障率为测试程序每次发包时产生错误的概率，每次发包是否出错之间相互独立。当多种错误可能混合出现时，每一类错误发生的概率相等。例如故障率20%且四种错误均可能出现，那么每一次发包时，发生错误的概率是20%，而发生某种特定错误的概率是`20% / 4 = 5%`。
+* 故障仅由测试程序产生。例如对于同学们实现的Sender的测试，测试用Receiver将会在发出包的时候按照设定概率产生设定的故障。
 
 ## FAQ
 
