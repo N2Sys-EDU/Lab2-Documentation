@@ -1,5 +1,7 @@
 # Lab2 RTP
 
+> 请从[北大教学网](https://course.pku.edu.cn)获取本Lab的邀请链接, DDL: `2023-12-15 23:30:00`
+
 - - -
 
 在lab2，你将会实现一个名为RTP（Reliable Transimission Protocol）的可靠传输协议。不同于lab1使用TCP来实现传输功能，UDP将作为RTP的基本传输API。为了实现RTP，你需要实现**建立连接、传输数据和终止连接**这三部分的功能，并且需要充分考虑信道可能出现的各种错误，包括**丢包、损坏、重复、乱序**等问题。
