@@ -1,6 +1,6 @@
 # Lab2 RTP
 
-> 请从[北大教学网](https://course.pku.edu.cn)获取本Lab的邀请链接, DDL: `2024-12-15 23:59:00`
+> 请从[北大教学网](https://course.pku.edu.cn)获取本Lab的邀请链接, DDL: `2025-12-07 23:59:00`
 
 - - -
 
